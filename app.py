@@ -183,12 +183,17 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--db',default='data/finance.db')
     parser.add_argument('--port',type=int,default=8000)
+    parser.add_argument('--open-browser', action='store_true')
     args = parser.parse_args()
     Path(args.db).parent.mkdir(parents=True,exist_ok=True)
     Finance(args.db).close()
     server = ThreadingHTTPServer(('127.0.0.1',args.port),Handler)
     server.db_path = args.db
     print(f'Meu Painel Financeiro iniciado na porta {args.port}',flush=True)
+    if args.open_browser:
+        import threading
+        import webbrowser
+        threading.Timer(0.5, webbrowser.open, args=(f'http://127.0.0.1:{args.port}',)).start()
     server.serve_forever()
 
 

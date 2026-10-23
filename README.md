@@ -31,3 +31,9 @@ python3 -m unittest -v
 ```
 
 Os testes usam bancos temporários e cobrem os seis requisitos, preservação dos originais, conflitos de importação e independência do aluguel. Nenhum dado real é necessário.
+
+## Windows: iniciar localmente
+
+Extraia todos os arquivos em uma pasta com permissao de escrita e abra `INICIAR_WINDOWS.bat` com duplo clique. O inicializador usa o Python instalado, inicia o painel e abre o navegador. Mantenha o terminal aberto durante o uso. Os dados ficam em `data/finance.db` nessa mesma pasta. Nenhum pacote ou acesso a internet e necessario para executar. Requer Python 3.12+.
+
+Se aparecer conexao recusada, confira se o terminal mostra a mensagem de inicializacao ou algum erro. Se aparecer uma pagina de bloqueio corporativo, solicite a TI autorizacao para o servidor local em `http://127.0.0.1:8000`; o inicializador nao altera politicas, proxy ou firewall.
