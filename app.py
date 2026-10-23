@@ -152,8 +152,10 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         # JSON-only, same-origin requests; do not expose this local server publicly.
-        if self.headers.get('Content-Type','').split(';')[0] != 'application/json':
-            self.send_json(415,{'error':'Use application/json'})
+        is_pdf = urlparse(self.path).path == '/api/pdf/preview'
+        expected_type = 'application/pdf' if is_pdf else 'application/json'
+        if self.headers.get('Content-Type','').split(';')[0] != expected_type:
+            self.send_json(415,{'error':'Tipo de conteúdo inválido'})
             return
         origin = self.headers.get('Origin')
         if origin and origin != 'http://' + self.headers.get('Host',''):
@@ -162,8 +164,17 @@ class Handler(BaseHTTPRequestHandler):
         f = Finance(self.server.db_path)
         try:
             size = int(self.headers.get('Content-Length',0))
-            if not 0 < size <= 5_000_000: raise ValueError('Tamanho inválido')
-            data = json.loads(self.rfile.read(size))
+            if not 0 < size <= 20_000_000: raise ValueError('Limite de arquivo: 20 MB')
+            body = self.rfile.read(size)
+            if is_pdf:
+                from pdf_import import parse_pdf
+                try:
+                    preview = parse_pdf(body)
+                except Exception as error:
+                    raise ValueError('Não foi possível ler o PDF: ' + str(error)) from error
+                self.send_json(200, preview)
+                return
+            data = json.loads(body)
             path = urlparse(self.path).path
             if path == '/api/import':
                 if not isinstance(data,list): raise ValueError('Envie uma lista de lançamentos')

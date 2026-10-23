@@ -1,10 +1,16 @@
 # Meu Painel Financeiro
 
-Aplicação local com Python 3.12+ e SQLite, sem dependências externas.
+Aplicação local com Python 3.12+ e SQLite, com extração de PDF via pypdf.
 
 ## Executar
 
-No diretório do projeto:
+No diretório do projeto, instale a dependência uma vez (requer acesso ao registro de pacotes autorizado):
+
+```sh
+python -m pip install -r requirements.txt
+```
+
+Depois execute:
 
 ```sh
 python3 app.py --db data/finance.db --port 8000
@@ -34,6 +40,14 @@ Os testes usam bancos temporários e cobrem os seis requisitos, preservação do
 
 ## Windows: iniciar localmente
 
-Extraia todos os arquivos em uma pasta com permissao de escrita e abra `INICIAR_WINDOWS.bat` com duplo clique. O inicializador usa o Python instalado, inicia o painel e abre o navegador. Mantenha o terminal aberto durante o uso. Os dados ficam em `data/finance.db` nessa mesma pasta. Nenhum pacote ou acesso a internet e necessario para executar. Requer Python 3.12+.
+Extraia todos os arquivos em uma pasta com permissao de escrita e abra `INICIAR_WINDOWS.bat` com duplo clique. O inicializador usa o Python instalado, inicia o painel e abre o navegador. Mantenha o terminal aberto durante o uso. Os dados ficam em `data/finance.db` nessa mesma pasta. A importação PDF requer pypdf: instale com `py -3 -m pip install -r requirements.txt` antes do uso. Após instalar, o processamento é local e não envia extratos a serviços externos. Requer Python 3.12+.
 
 Se aparecer conexao recusada, confira se o terminal mostra a mensagem de inicializacao ou algum erro. Se aparecer uma pagina de bloqueio corporativo, solicite a TI autorizacao para o servidor local em `http://127.0.0.1:8000`; o inicializador nao altera politicas, proxy ou firewall.
+
+## Extratos PDF
+
+Na tela, selecione um PDF textual Bradesco Celular ou Banco do Brasil e confira a prévia antes de confirmar. Limite: 20 MB e 200 páginas. PDFs digitalizados e protegidos não são suportados. A prévia não grava lançamentos. Saldos e totais não viram transações; o total geral do Bradesco é conciliado quando disponível. Descrições em múltiplas linhas são reunidas. Nenhum beneficiário gera classificação confirmada automaticamente.
+
+A identidade usa banco, conta, data, documento, descrição, tipo, valor e ocorrência. Reimportar o mesmo conteúdo mantém as classificações. PDFs sobrepostos que alterem descrições ou a quantidade de operações idênticas precisam de conferência humana; não é possível garantir identidade bancária universal a partir de PDF.
+
+O JSON original de cada lançamento guarda documento, página e SHA-256 do PDF. O arquivo PDF completo não é armazenado pelo painel; guarde o original em local seguro. Arquivos enviados nesta conversa não fazem parte do repositório.
