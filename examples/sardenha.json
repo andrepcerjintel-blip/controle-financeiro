@@ -1,0 +1,11 @@
+[
+  {
+    "institution": "Não informada (exemplo)",
+    "account": "exemplo",
+    "external_id": "exemplo-sardenha-2026-09-02",
+    "date": "2026-09-02",
+    "description": "PAGTO ELETRON COBRANCA — CONDOMINIO DO EDIFICIO SARDENHA",
+    "amount_cents": 95380,
+    "type": "debito"
+  }
+]
