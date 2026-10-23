@@ -38,6 +38,10 @@ class Finance:
           BEGIN SELECT RAISE(ABORT,'Histórico imutável'); END;
         ''')
 
+        if 'nature' not in {r[1] for r in self.db.execute('PRAGMA table_info(classifications)')}:
+            self.db.execute("ALTER TABLE classifications ADD COLUMN nature TEXT NOT NULL DEFAULT 'nao_definido'")
+            self.db.commit()
+
     def close(self):
         self.db.close()
 
@@ -85,12 +89,17 @@ class Finance:
             recurrence = 0
         if not values['category'].strip():
             raise ValueError('Categoria obrigatória')
+        from analytics import NATURES
+        nature = data.get('nature', before['nature'] if before else 'nao_definido')
+        if nature not in NATURES: raise ValueError('Natureza inválida')
+        if status == 'pendente': nature = 'nao_definido'
         stamp = self.db.execute("SELECT strftime('%Y-%m-%dT%H:%M:%fZ','now')").fetchone()[0]
-        self.db.execute('''INSERT INTO classifications VALUES(?,?,?,?,?,?,?,?,?)
+        self.db.execute('''INSERT INTO classifications(transaction_id,source,status,category,subcategory,custom_description,recurrence,notes,updated_at) VALUES(?,?,?,?,?,?,?,?,?)
             ON CONFLICT(transaction_id) DO UPDATE SET source=excluded.source,status=excluded.status,
             category=excluded.category,subcategory=excluded.subcategory,custom_description=excluded.custom_description,
             recurrence=excluded.recurrence,notes=excluded.notes,updated_at=excluded.updated_at''',
             (tid,source,status,values['category'],values['subcategory'],values['custom_description'],recurrence,values['notes'],stamp))
+        self.db.execute('UPDATE classifications SET nature=? WHERE transaction_id=?', (nature,tid))
         after = dict(self.db.execute('SELECT * FROM classifications WHERE transaction_id=?',(tid,)).fetchone())
         self.db.execute('INSERT INTO classification_history(transaction_id,changed_at,before_json,after_json) VALUES(?,?,?,?)',
                         (tid,stamp,json.dumps(dict(before),ensure_ascii=False) if before else None,json.dumps(after,ensure_ascii=False)))
@@ -102,7 +111,7 @@ class Finance:
 
     def transactions(self):
         return [dict(r) for r in self.db.execute('''SELECT b.id,b.institution,b.account,b.external_id,b.date,b.description,
-            b.amount_cents,b.type,c.source,c.status,c.category,c.subcategory,c.custom_description,c.recurrence,c.notes,c.updated_at
+            b.amount_cents,b.type,c.source,c.status,c.category,c.subcategory,c.custom_description,c.recurrence,c.notes,c.updated_at,c.nature
             FROM bank_records b JOIN classifications c ON c.transaction_id=b.id ORDER BY b.date DESC,b.id DESC''')]
 
     def dashboard(self):
@@ -132,7 +141,9 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):
+        from urllib.parse import parse_qs
         path = urlparse(self.path).path
+        query = parse_qs(urlparse(self.path).query)
         if path == '/':
             body = Path(__file__).with_name('index.html').read_bytes()
             self.send_response(200)
@@ -143,6 +154,9 @@ class Handler(BaseHTTPRequestHandler):
         f = Finance(self.server.db_path)
         try:
             if path == '/api/transactions': self.send_json(200,f.transactions())
+            elif path == '/api/analytics':
+                from analytics import analyze
+                self.send_json(200,analyze(f.transactions(),query.get('start',[''])[0],query.get('end',[''])[0]))
             elif path == '/api/dashboard': self.send_json(200,f.dashboard())
             elif path.startswith('/api/history/'):
                 self.send_json(200,f.history(int(path.rsplit('/',1)[1])))
@@ -176,6 +190,11 @@ class Handler(BaseHTTPRequestHandler):
                 return
             data = json.loads(body)
             path = urlparse(self.path).path
+            if path == '/api/chat':
+                from analytics import analyze, answer
+                report = analyze(f.transactions(),data.get('start',''),data.get('end',''))
+                self.send_json(200,{'answer':answer(report,data.get('question','')), 'mode':'local_rules'})
+                return
             if path == '/api/import':
                 if not isinstance(data,list): raise ValueError('Envie uma lista de lançamentos')
                 f.import_records(data)

@@ -51,3 +51,11 @@ Na tela, selecione um PDF textual Bradesco Celular ou Banco do Brasil e confira 
 A identidade usa banco, conta, data, documento, descrição, tipo, valor e ocorrência. Reimportar o mesmo conteúdo mantém as classificações. PDFs sobrepostos que alterem descrições ou a quantidade de operações idênticas precisam de conferência humana; não é possível garantir identidade bancária universal a partir de PDF.
 
 O JSON original de cada lançamento guarda documento, página e SHA-256 do PDF. O arquivo PDF completo não é armazenado pelo painel; guarde o original em local seguro. Arquivos enviados nesta conversa não fazem parte do repositório.
+
+## Análise e conselheiro local
+
+A seção Análise financeira oferece período, barras mensais de entradas/saídas, categorias, natureza dos débitos e dez maiores débitos. Clique nas barras ou no ranking para abrir as movimentações. Os cartões superiores continuam mostrando o conjunto completo; a seção Análise e a tabela usam o período selecionado.
+
+Em Editar / histórico, confirme a classificação e defina a natureza: essencial, supérfluo, transferência ou investimento/resgate. Créditos confirmados como essenciais representam renda para as sugestões. Itens pendentes ou não revisados permanecem sem natureza analítica confirmada. Nenhum nome de estabelecimento determina sozinho que uma despesa é supérflua. A alteração de natureza fica no histórico. O SQLite recebe uma coluna adicional sem remover dados existentes.
+
+As recomendações mostram valores observados e cenários: por exemplo, reduzir em 10% os débitos explicitamente marcados como supérfluos. O limiar de 30% da renda confirmada é apenas referência. Fluxo líquido não é saldo da conta; entradas não são automaticamente salário, e transferências podem aparecer nas duas contas. O assistente local responde sobre maiores débitos, fluxo e revisão; não usa modelo generativo nem mantém contexto conversacional entre perguntas. Não executa alterações bancárias.
