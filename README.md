@@ -1,61 +1,71 @@
-# Meu Painel Financeiro
+# Meu Painel Financeiro · versão 2
 
-Aplicação local com Python 3.12+ e SQLite, com extração de PDF via pypdf.
+Painel local de finanças pessoais com Python 3.12+, SQLite, importação PDF e integração opcional com IA local via Ollama. Dados bancários e classificações são armazenados separadamente. A interface funciona sem bibliotecas, fontes ou serviços de gráficos externos.
 
-## Executar
+## Iniciar no Windows
 
-No diretório do projeto, instale a dependência uma vez (requer acesso ao registro de pacotes autorizado):
+Extraia todos os arquivos, incluindo a pasta `assets`, em uma pasta onde você possa gravar. No terminal dessa pasta:
 
-```sh
-python -m pip install -r requirements.txt
+```bat
+py -3 -m pip install -r requirements.txt
+py -3 app.py --open-browser
 ```
 
-Depois execute:
+Se seu Python for chamado `python`, substitua `py -3` por `python`. A instalação de `pypdf` é necessária apenas para importação PDF. Depois da instalação, o painel funciona localmente. O arquivo `INICIAR_WINDOWS.bat` é uma conveniência opcional; executar Python diretamente não depende dele. Mantenha o terminal aberto durante o uso.
 
-```sh
-python3 app.py --db data/finance.db --port 8000
-```
+O painel atende em `http://127.0.0.1:8000` e salva o banco em `data/finance.db`. Para usar outra porta ou banco, passe `--port` e `--db`. É um aplicativo local individual, sem autenticação multiusuário. Não é um serviço para publicar na internet.
 
-O servidor atende somente na interface local. Esta versão é para uso local individual, sem autenticação. O arquivo SQLite é criado somente se ausente; reiniciar não apaga dados. Faça backups do banco com a aplicação parada. Processos precisam ser iniciados novamente em novas tarefas na nuvem.
+## Atualizar preservando seus dados
 
-## Importação e classificação
+1. Feche o painel e faça uma cópia da pasta `data` como backup.
+2. Substitua os arquivos do projeto, inclusive `assets`, sem apagar ou substituir sua pasta `data`.
+3. Execute a instalação das dependências e inicie novamente.
 
-Use a opção de importar JSON na tela. O formato está em `examples/sardenha.json`; instituição, conta e identificador desse exemplo são marcadores explícitos, não dados bancários reais. Nenhum exemplo é carregado automaticamente. Para dados reais, informe instituição, conta e identificador estável fornecido pelo banco. Valores são inteiros positivos em centavos; tipo é `debito` ou `credito`. A data usa `AAAA-MM-DD`. Campos bancários adicionais são preservados no JSON original no banco.
+O SQLite é criado apenas se ausente. Mudanças de esquema são aditivas; perfil e metas ficam em uma tabela própria. Registros e histórico existentes são preservados. Não mantenha duas cópias da aplicação usando caminhos de banco diferentes sem saber qual contém seus dados.
 
-Após importar, selecione **Pendente de identificação** na coluna Classificação. O lançamento de referência passa a categoria **Não identificado**, mantém R$ 953,80 nas saídas realizadas e deixa de gerar recorrência ou projeção. O indicador de pendentes abre a lista filtrada. Em **Editar / histórico**, edite categoria, subcategoria, descrição personalizada, recorrência e observações ou consulte as alterações com horário UTC.
+## O que cada área faz
 
-Cada seleção na interface cria uma classificação manual, inclusive a opção “Automática — não revisada”: o status de revisão e a origem da edição são campos distintos. Regras automáticas através de `Finance.classify(..., source='automatic')` respeitam a prioridade manual. Esta versão não presume categorias pelo nome de beneficiários.
+- **Visão geral:** entradas, saídas, fluxo líquido e pendências do mesmo período aplicado; barras mensais e distribuição das saídas; categorias e dez maiores débitos clicáveis.
+- **Plano de ação:** prioridades explicadas, limites mensais, cenários de economia, reserva e aporte necessário para uma meta. Compara gastos a limites apenas em um único mês. Compara totais mensais observados, sem presumir extratos completos.
+- **Movimentações:** busca, filtros, paginação e classificação individual. Sugestões por descrição são pistas para conferência; somente salvar no editor efetiva a alteração.
+- **Perfil e metas:** renda líquida, limites, poupança, saldo/parcelas de dívidas, reserva e objetivo. Valores são declarados pelo usuário e separados das transações. Campos monetários em branco equivalem a informação não preenchida/zero para o planejamento, nunca a renda inferida.
+- **Assistente IA:** diagnóstico por regras ou conversa com um modelo local real, com histórico em memória. Veja [configuração do Ollama](docs/CHAT_IA.md).
+- **Importar extratos:** PDF com prévia e confirmação; formato JSON alternativo.
 
-Dados bancários e histórico têm proteção contra atualização e exclusão por triggers. Classificações ficam em tabela separada, com histórico antes/depois. A mesma identidade bancária é importada uma única vez; conflito nos dados gera erro e desfaz o lote inteiro. Transações com identificadores distintos são mantidas mesmo quando semelhantes, disponíveis para análise humana de duplicidade; não há exclusão por similaridade.
+A natureza pode ser essencial, supérfluo, transferência, investimento/resgate, renda (crédito) ou dívida/custo financeiro. Ela só entra como confirmada na análise quando o status é Confirmada. Créditos essenciais de versões anteriores continuam tratados como renda por compatibilidade; novas edições devem usar Renda. Categorias e necessidade pessoal não são determinadas automaticamente por nomes de beneficiários.
 
-O total de pendentes soma os valores absolutos e inclui créditos e débitos; as saídas e categorias do dashboard consideram apenas débitos. A estimativa de despesas fixas soma os débitos explicitamente confirmados como recorrentes; não é um calendário de vencimentos e não deduplica meses históricos. Não marque múltiplos pagamentos históricos da mesma obrigação para estimar uma única parcela mensal.
+O percentual de visibilidade indica a parcela das saídas cujo valor tem natureza confirmada. Não é score de crédito nem avaliação do perfil de investidor. Renda planejada não é saldo disponível. Essenciais, supérfluos, parcelas de dívidas e poupança devem ser planejados separadamente, sem sobreposição. A reserva usa essenciais + parcelas multiplicados pelos meses desejados. O aporte da meta não presume rendimentos nem inflação. Sugestões de redução de 10% são cenários, não previsões.
 
-## Testar
+## Classificação manual e persistência
+
+Selecionar **Pendente de identificação** define `status=pendente`, categoria **Não identificado**, natureza não definida e recorrência desativada. O valor continua nas saídas realizadas, disponível para análise, sem projeção automática. O indicador de pendentes considera créditos e débitos em valores absolutos; as saídas consideram apenas débitos.
+
+O registro bancário original e o histórico são protegidos por triggers contra atualização e exclusão. Cada edição registra antes/depois com horário UTC, exibido no fuso do navegador. Categoria, subcategoria, descrição personalizada, natureza, recorrência e observações podem ser alteradas sem apagar o original. Ajustes manuais têm prioridade por lançamento e não se propagam para transações semelhantes.
+
+A API legada `/api/dashboard` mantém uma soma simples de lançamentos explicitamente marcados como recorrentes; não é um calendário de parcelas nem uma previsão deduplicada. A nova interface baseia o planejamento nos valores declarados no Perfil e não apresenta essa soma como previsão futura.
+
+## Importação
+
+PDFs textuais Bradesco Celular e Banco do Brasil, até 20 MB e 200 páginas. Imagens digitalizadas e PDFs protegidos não são suportados. A prévia não grava dados. Saldos e totais não viram transações; o total geral do Bradesco é conciliado quando disponível. Aplicações e resgates permanecem movimentos bancários para revisão, sem serem presumidos consumo ou renda.
+
+A identidade derivada do PDF usa banco, conta, data, documento, descrição, tipo, valor e ocorrência. Reimportar o mesmo conteúdo preserva as classificações. PDFs sobrepostos com descrições alteradas ou contagens diferentes de operações idênticas podem precisar de revisão de duplicidades. Não há exclusão automática por similaridade.
+
+O JSON original preserva campos adicionais, documento, página e SHA-256 do PDF. O PDF completo não é armazenado pelo painel; guarde seu original. PDFs e dados reais enviados durante desenvolvimento não fazem parte do repositório.
+
+O formato JSON está em `examples/sardenha.json`. Seus campos de instituição, conta e ID são marcadores explícitos de exemplo. Para uso real, informe dados bancários e identificadores estáveis. Valores são inteiros positivos em centavos e tipo `debito` ou `credito`; datas em `AAAA-MM-DD`. Conflito entre dados do mesmo ID rejeita o lote inteiro. Nenhum exemplo é importado automaticamente.
+
+## Testes
 
 ```sh
 python3 -m unittest -v
 ```
 
-Os testes usam bancos temporários e cobrem os seis requisitos, preservação dos originais, conflitos de importação e independência do aluguel. Nenhum dado real é necessário.
+A suíte cobre classificação, reimportação, imutabilidade, migração, perfil, diagnóstico, contrato do Ollama e leitura de PDF com dados sintéticos.
 
-## Windows: iniciar localmente
+Teste opcional de navegador, com Playwright instalado e Chromium disponível:
 
-Extraia todos os arquivos em uma pasta com permissao de escrita e abra `INICIAR_WINDOWS.bat` com duplo clique. O inicializador usa o Python instalado, inicia o painel e abre o navegador. Mantenha o terminal aberto durante o uso. Os dados ficam em `data/finance.db` nessa mesma pasta. A importação PDF requer pypdf: instale com `py -3 -m pip install -r requirements.txt` antes do uso. Após instalar, o processamento é local e não envia extratos a serviços externos. Requer Python 3.12+.
+```sh
+CHROMIUM_PATH=/usr/bin/chromium python3 tests/browser_smoke.py
+```
 
-Se aparecer conexao recusada, confira se o terminal mostra a mensagem de inicializacao ou algum erro. Se aparecer uma pagina de bloqueio corporativo, solicite a TI autorizacao para o servidor local em `http://127.0.0.1:8000`; o inicializador nao altera politicas, proxy ou firewall.
-
-## Extratos PDF
-
-Na tela, selecione um PDF textual Bradesco Celular ou Banco do Brasil e confira a prévia antes de confirmar. Limite: 20 MB e 200 páginas. PDFs digitalizados e protegidos não são suportados. A prévia não grava lançamentos. Saldos e totais não viram transações; o total geral do Bradesco é conciliado quando disponível. Descrições em múltiplas linhas são reunidas. Nenhum beneficiário gera classificação confirmada automaticamente.
-
-A identidade usa banco, conta, data, documento, descrição, tipo, valor e ocorrência. Reimportar o mesmo conteúdo mantém as classificações. PDFs sobrepostos que alterem descrições ou a quantidade de operações idênticas precisam de conferência humana; não é possível garantir identidade bancária universal a partir de PDF.
-
-O JSON original de cada lançamento guarda documento, página e SHA-256 do PDF. O arquivo PDF completo não é armazenado pelo painel; guarde o original em local seguro. Arquivos enviados nesta conversa não fazem parte do repositório.
-
-## Análise e conselheiro local
-
-A seção Análise financeira oferece período, barras mensais de entradas/saídas, categorias, natureza dos débitos e dez maiores débitos. Clique nas barras ou no ranking para abrir as movimentações. Os cartões superiores continuam mostrando o conjunto completo; a seção Análise e a tabela usam o período selecionado.
-
-Em Editar / histórico, confirme a classificação e defina a natureza: essencial, supérfluo, transferência ou investimento/resgate. Créditos confirmados como essenciais representam renda para as sugestões. Itens pendentes ou não revisados permanecem sem natureza analítica confirmada. Nenhum nome de estabelecimento determina sozinho que uma despesa é supérflua. A alteração de natureza fica no histórico. O SQLite recebe uma coluna adicional sem remover dados existentes.
-
-As recomendações mostram valores observados e cenários: por exemplo, reduzir em 10% os débitos explicitamente marcados como supérfluos. O limiar de 30% da renda confirmada é apenas referência. Fluxo líquido não é saldo da conta; entradas não são automaticamente salário, e transferências podem aparecer nas duas contas. O assistente local responde sobre maiores débitos, fluxo e revisão; não usa modelo generativo nem mantém contexto conversacional entre perguntas. Não executa alterações bancárias.
+Esse teste usa banco temporário e dados sintéticos; verifica importação, gráficos, filtros, edição, perfil, conversa por regras e layout móvel. Playwright não é uma dependência para executar o painel.

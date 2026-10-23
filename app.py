@@ -12,6 +12,7 @@ class Finance:
         self.db.row_factory = sqlite3.Row
         self.db.execute('PRAGMA foreign_keys=ON')
         self.db.executescript('''
+        CREATE TABLE IF NOT EXISTS user_settings (key TEXT PRIMARY KEY, value_json TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS bank_records (
           id INTEGER PRIMARY KEY, institution TEXT NOT NULL, account TEXT NOT NULL,
           external_id TEXT NOT NULL, date TEXT NOT NULL, description TEXT NOT NULL,
@@ -45,6 +46,17 @@ class Finance:
     def close(self):
         self.db.close()
 
+    def profile(self):
+        from financial_profile import DEFAULT_PROFILE
+        row = self.db.execute("SELECT value_json FROM user_settings WHERE key='profile'").fetchone()
+        return {**DEFAULT_PROFILE, **(json.loads(row[0]) if row else {})}
+
+    def save_profile(self, data):
+        from financial_profile import validate_profile
+        profile = validate_profile(data)
+        with self.db:
+            self.db.execute("INSERT INTO user_settings VALUES('profile',?) ON CONFLICT(key) DO UPDATE SET value_json=excluded.value_json", (json.dumps(profile,ensure_ascii=False),))
+
     def import_records(self, records):
         # Validate the complete batch before writing. Stable bank IDs are mandatory.
         from datetime import date
@@ -73,7 +85,8 @@ class Finance:
         before = self.db.execute('SELECT * FROM classifications WHERE transaction_id=?', (tid,)).fetchone()
         if source == 'automatic' and before and before['source'] == 'manual':
             return False
-        if not self.db.execute('SELECT 1 FROM bank_records WHERE id=?', (tid,)).fetchone():
+        original = self.db.execute('SELECT type FROM bank_records WHERE id=?', (tid,)).fetchone()
+        if not original:
             raise ValueError('Lançamento inexistente')
         status = data.get('status')
         if status not in ('pendente','confirmada','automatica'):
@@ -92,6 +105,7 @@ class Finance:
         from analytics import NATURES
         nature = data.get('nature', before['nature'] if before else 'nao_definido')
         if nature not in NATURES: raise ValueError('Natureza inválida')
+        if nature == 'renda' and original['type'] != 'credito': raise ValueError('Renda só pode ser atribuída a crédito')
         if status == 'pendente': nature = 'nao_definido'
         stamp = self.db.execute("SELECT strftime('%Y-%m-%dT%H:%M:%fZ','now')").fetchone()[0]
         self.db.execute('''INSERT INTO classifications(transaction_id,source,status,category,subcategory,custom_description,recurrence,notes,updated_at) VALUES(?,?,?,?,?,?,?,?,?)
@@ -140,23 +154,42 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def valid_host(self):
+        allowed = {f'127.0.0.1:{self.server.server_port}', f'localhost:{self.server.server_port}'}
+        if self.headers.get('Host') not in allowed:
+            self.send_json(403, {'error':'Host não autorizado'})
+            return False
+        return True
+
     def do_GET(self):
+        if not self.valid_host(): return
         from urllib.parse import parse_qs
         path = urlparse(self.path).path
         query = parse_qs(urlparse(self.path).query)
-        if path == '/':
-            body = Path(__file__).with_name('index.html').read_bytes()
+        static = {'/':'index.html','/assets/app.js':'assets/app.js','/assets/style.css':'assets/style.css'}
+        if path in static:
+            body = (Path(__file__).parent / static[path]).read_bytes()
             self.send_response(200)
-            self.send_header('Content-Type','text/html; charset=utf-8')
+            self.send_header('Content-Type', ('text/html' if path=='/' else 'text/javascript' if path.endswith('.js') else 'text/css')+'; charset=utf-8')
+            self.send_header('Cache-Control','no-cache')
+            self.send_header('X-Content-Type-Options','nosniff')
             self.end_headers()
             self.wfile.write(body)
             return
         f = Finance(self.server.db_path)
         try:
             if path == '/api/transactions': self.send_json(200,f.transactions())
+            elif path == '/api/profile': self.send_json(200,f.profile())
+            elif path == '/api/ai/status':
+                from intelligence import available_models
+                self.send_json(200,available_models())
             elif path == '/api/analytics':
                 from analytics import analyze
-                self.send_json(200,analyze(f.transactions(),query.get('start',[''])[0],query.get('end',[''])[0]))
+                from intelligence import diagnose
+                rows=f.transactions(); start=query.get('start',[''])[0]; end=query.get('end',[''])[0]
+                report=analyze(rows,start,end)
+                report['diagnosis']=diagnose(rows,report,f.profile(),start,end)
+                self.send_json(200,report)
             elif path == '/api/dashboard': self.send_json(200,f.dashboard())
             elif path.startswith('/api/history/'):
                 self.send_json(200,f.history(int(path.rsplit('/',1)[1])))
@@ -165,6 +198,7 @@ class Handler(BaseHTTPRequestHandler):
         finally: f.close()
 
     def do_POST(self):
+        if not self.valid_host(): return
         # JSON-only, same-origin requests; do not expose this local server publicly.
         is_pdf = urlparse(self.path).path == '/api/pdf/preview'
         expected_type = 'application/pdf' if is_pdf else 'application/json'
@@ -190,14 +224,22 @@ class Handler(BaseHTTPRequestHandler):
                 return
             data = json.loads(body)
             path = urlparse(self.path).path
+            if path != '/api/import' and not isinstance(data,dict): raise ValueError('Envie um objeto JSON')
             if path == '/api/chat':
-                from analytics import analyze, answer
-                report = analyze(f.transactions(),data.get('start',''),data.get('end',''))
-                self.send_json(200,{'answer':answer(report,data.get('question','')), 'mode':'local_rules'})
+                from analytics import analyze
+                from intelligence import diagnose,chat,LocalAIError
+                rows=f.transactions();start=data.get('start','');end=data.get('end','');profile=f.profile()
+                report=analyze(rows,start,end);diagnosis=diagnose(rows,report,profile,start,end)
+                try:
+                    result=chat(data,report,diagnosis,profile,start,end)
+                except LocalAIError as error:
+                    self.send_json(503,{'error':str(error)});return
+                self.send_json(200,result)
                 return
             if path == '/api/import':
                 if not isinstance(data,list): raise ValueError('Envie uma lista de lançamentos')
                 f.import_records(data)
+            elif path == '/api/profile': f.save_profile(data)
             elif path.startswith('/api/classify/'):
                 f.classify(int(path.rsplit('/',1)[1]),data)
             else:

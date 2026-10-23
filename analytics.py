@@ -1,9 +1,14 @@
 """Local, explainable financial analysis. No external AI or data transmission."""
 from collections import defaultdict
 
-NATURES = ('nao_definido','essencial','superfluo','transferencia','investimento')
+NATURES = ('nao_definido','essencial','superfluo','transferencia','investimento','renda','divida')
 
 def analyze(rows, start='', end=''):
+    from datetime import date
+    if not isinstance(start,str) or not isinstance(end,str): raise ValueError('Período inválido')
+    for value in (start,end):
+        if value: date.fromisoformat(value)
+    if start and end and start>end: raise ValueError('Data inicial deve preceder a final')
     rows = [r for r in rows if (not start or r['date'] >= start) and (not end or r['date'] <= end)]
     months = defaultdict(lambda: dict(incoming=0,outgoing=0,ids=[]))
     categories = defaultdict(lambda: dict(amount_cents=0,ids=[]))
@@ -19,10 +24,10 @@ def analyze(rows, start='', end=''):
             categories[cat]['amount_cents'] += amount; categories[cat]['ids'].append(r['id'])
             n = r.get('nature','nao_definido') if r['status']=='confirmada' else 'nao_definido'
             nature[n]['amount_cents'] += amount; nature[n]['ids'].append(r['id'])
-            if n not in ('transferencia','investimento'): spending += amount
+            if n not in ('transferencia','investimento','renda','divida'): spending += amount
         else:
             incoming += amount
-            if r['status']=='confirmada' and r.get('nature') not in ('transferencia','investimento','nao_definido',None): income += amount
+            if r['status']=='confirmada' and r.get('nature') in ('renda','essencial'): income += amount
     top = sorted([r for r in rows if r['type']=='debito'],key=lambda r:r['amount_cents'],reverse=True)[:10]
     unknown = nature['nao_definido']['amount_cents']
     tips = []
